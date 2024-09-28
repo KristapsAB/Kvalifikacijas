@@ -61,12 +61,20 @@ function Header() {
         </a>
     );
 
+    const handleLogout = () => {
+        sessionStorage.clear();
+        localStorage.clear();
+    
+        window.location.href = '/login';
+    };
+    
+
     return (
-        <header className="w-full bg-background p-2 md:p-4">
+        <header className="w-full bg-background p-2 md:p-4 font-lexend">
             <div className="container mx-auto">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center flex-shrink-0">
-                        <h1 className="text-lg md:text-xl text-text font-extrabold tracking-wide">E-CAPSULE</h1>
+                        <h1 className="text-lg md:text-xl text-text font-extrabold tracking-wide font-lexend">E-CAPSULE</h1>
                     </div>
 
                     <div className="md:hidden">
@@ -76,12 +84,12 @@ function Header() {
                     </div>
 
                     <nav className="hidden md:flex items-center justify-center flex-grow">
-                        <div className="flex space-x-2 md:space-x-4 lg:space-x-6 text-sm md:text-base">
-                            <NavItem href="#">Home</NavItem>
-                            <NavItem href="#">Dashboard</NavItem>
-                            <NavItem href="#">Profile</NavItem>
-                            <NavItem href="#">My Capsules</NavItem>
-                            <NavItem href="#">Discover</NavItem>
+                        <div className="flex space-x-2 md:space-x-4 lg:space-x-6 text-sm md:text-base font-lexend">
+                            <NavItem href="/Home">Home</NavItem>
+                            <NavItem href="/Dashboard">Dashboard</NavItem>
+                            <NavItem href="/Profile">Profile</NavItem>
+                            <NavItem href="/CapsuleCreation">Create Capsule</NavItem>
+                            <NavItem href="/Discover">Discover</NavItem>
                         </div>
                     </nav>
 
@@ -104,18 +112,20 @@ function Header() {
                                 </div>
                             )}
                         </div>
-                        <button className="text-text bg-secondary rounded-xl py-1.5 px-8 font-bold text-xs md:text-sm">LOGOUT</button>
+                        <button onClick={handleLogout} className="text-text bg-secondary rounded-xl py-1.5 px-8 font-bold text-xs md:text-sm">
+                            LOGOUT
+                        </button>
                     </div>
                 </div>
 
                 {isMenuOpen && (
                     <nav className="mt-4 md:hidden">
                         <div className="flex flex-col font-light space-y-2">
-                            <NavItem href="#">Home</NavItem>
-                            <NavItem href="#">Dashboard</NavItem>
-                            <NavItem href="#">Profile</NavItem>
-                            <NavItem href="#">Inventory</NavItem>
-                            <NavItem href="#">Capsules</NavItem>
+                            <NavItem href="/Home">Home</NavItem>
+                            <NavItem href="/Dashboard">Dashboard</NavItem>
+                            <NavItem href="/Profile">Profile</NavItem>
+                            <NavItem href="/CapsuleCreation">Inventory</NavItem>
+                            <NavItem href="/Discover">Capsules</NavItem>
                         </div>
                         <div className="mt-4 flex flex-col space-y-2">
                             <div className="relative">
@@ -130,13 +140,15 @@ function Header() {
                                 {isLangMenuOpen && (
                                     <div className="absolute left-0 right-0 mt-2 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
                                         <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                                            <LangButton lang="ENG" flag={EngFlag} />
+                                            <LangButton lang="ENG"  flag={EngFlag} />
                                             <LangButton lang="LAT" flag={LatFlag} />
                                         </div>
                                     </div>
                                 )}
                             </div>
-                            <button className="text-text bg-secondary w-full rounded-xl py-1">LOGOUT</button>
+                            <button onClick={handleLogout} className="text-text bg-secondary w-full rounded-xl py-1">
+                                LOGOUT
+                            </button>
                         </div>
                     </nav>
                 )}

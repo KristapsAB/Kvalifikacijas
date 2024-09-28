@@ -5,6 +5,9 @@ import Header from './components/Header';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Profile from './pages/Profile';
+import 'slick-carousel/slick/slick.css';
+import 'slick-carousel/slick/slick-theme.css';
+import CapsuleCreation from './pages/CapsuleCreation';
 
 function App() {
   const location = useLocation();
@@ -19,6 +22,7 @@ function App() {
         <Route path="/login" element={<Login />} /> 
         <Route path="/register" element={<Register />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/CapsuleCreation" element={<CapsuleCreation />} />
       </Routes>
     </div>
   );

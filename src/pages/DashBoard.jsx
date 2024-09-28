@@ -40,7 +40,7 @@ function Dashboard() {
   const percentage = 100;
 
   return (
-    <div className='h-screen bg-background flex flex-col'>
+    <div className='h-screen bg-background flex flex-col font-lexend'>
       <div className='bg-background w-full h-6/6 flex'>
         <div className='w-1/3 bg-background flex p-8 items-end flex-col space-y-6'>
           
