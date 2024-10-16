@@ -34,6 +34,28 @@ function Login() {
         return "";
     };
 
+    const initializeFriendRequestCount = async (token) => {
+        try {
+            const response = await fetch('http://127.0.0.1:8000/api/friends/requests/count', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                console.error('Failed to fetch initial friend request count');
+                return;
+            }
+
+            const data = await response.json();
+            // Store the initial count in localStorage so Header component can access it immediately
+            localStorage.setItem('friendRequestCount', data.count);
+        } catch (error) {
+            console.error('Error fetching initial friend request count:', error);
+        }
+    };
+
     const handleBlur = (field) => {
         setTouched({ ...touched, [field]: true });
     };
@@ -83,12 +105,15 @@ function Login() {
             localStorage.setItem('access_token', data.access_token);
             localStorage.setItem('user', JSON.stringify(data.user));
 
-            navigate('/profile'); 
+            // Initialize friend request count before navigation
+            await initializeFriendRequestCount(data.access_token);
+
+            navigate('/profile');
         } catch (err) {
             setErrors({ general: 'An unexpected error occurred. Please try again.' });
         }
     };
-
+    
     return (
         <div className="h-screen w-screen flex bg-background overflow-hidden justify-center items-center">
             <div className="flex w-11/12 h-full flex-col md:flex-row">

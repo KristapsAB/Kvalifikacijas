@@ -8,21 +8,24 @@ import Profile from './pages/Profile';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 import CapsuleCreation from './pages/CapsuleCreation';
+import Friends from './pages/FindFriends';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   const location = useLocation();
-  
-  const currentPath = location.pathname.toLowerCase().replace(/\/+$/, ''); 
+  const currentPath = location.pathname.toLowerCase().replace(/\/+$/, '');
 
   return (
     <div>
-      {currentPath !== '/login' && currentPath !== '/register' && <Header />}
+      <Toaster position="top-right" />
+      {currentPath !== '/login' && currentPath !== '/register' && currentPath !== '/email-verification' && <Header />}
       <Routes>
         <Route path="/dashboard" element={<DashBoard />} />
-        <Route path="/login" element={<Login />} /> 
+        <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/CapsuleCreation" element={<CapsuleCreation />} />
+        <Route path="/friends" element={<Friends />} />
       </Routes>
     </div>
   );
