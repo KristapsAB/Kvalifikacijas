@@ -3,6 +3,9 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheckCircle, faTrash, faComment } from '@fortawesome/free-solid-svg-icons';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import CapsuleDesignSelector from '../components/CapsuleDesignSelector';
+import CapsulePreview from '../components/CapsulePreview';
+import CapsuleSharing from '../components/CapsuleSharing';
 
 function CapsuleCreation() {
     const steps = [
@@ -12,20 +15,10 @@ function CapsuleCreation() {
         'IMAGE ADDONS',
         'VISION',
         'PRIVACY',
-        'CAPSULE DESIGN'
+        'CAPSULE DESIGN',
+        'PREVIEW',
+        'SHARING'
     ];
-    const [selectedImage, setSelectedImage] = useState(null);
-    const [imageComment, setImageComment] = useState('');
-
-    const [completedSteps, setCompletedSteps] = useState({
-        title: false,
-        images: false,
-        time: false,
-        addons: false,
-        vision: false,
-        privacy: false,
-        design: false
-    });
 
     const [currentStep, setCurrentStep] = useState(0);
     const [formData, setFormData] = useState({
@@ -33,13 +26,23 @@ function CapsuleCreation() {
         description: '',
         images: [],
         time: new Date(),
-        addons: [],
         vision: '',
-        privacy: '',
-        design: ''
+        privacy: 'private',
+        design: 'default',
+        sharedWith: []
     });
     
+    const [selectedImage, setSelectedImage] = useState(null);
+    const [imageComment, setImageComment] = useState('');
+
     const token = localStorage.getItem('access_token');
+
+    const handleInputChange = (e) => {
+        setFormData({
+            ...formData,
+            [e.target.name]: e.target.value,
+        });
+    };
 
     const handleImageSelection = (e) => {
         const files = Array.from(e.target.files);
@@ -53,24 +56,10 @@ function CapsuleCreation() {
         const updatedImages = formData.images.filter((_, i) => i !== index);
         setFormData({ ...formData, images: updatedImages });
     };
+
     const selectImage = (index) => {
         setSelectedImage(index);
         setImageComment(formData.images[index].comment || '');
-    };
-    
-    const handleDateChange = (date) => {
-        console.log('Date selected:', date);
-        setFormData({
-            ...formData,
-            time: date,
-        });
-    };
-
-    const handleInputChange = (e) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value,
-        });
     };
 
     const saveImageComment = () => {
@@ -81,48 +70,55 @@ function CapsuleCreation() {
                     index === selectedImage ? { ...img, comment: imageComment } : img
                 )
             }));
-            console.log(`Saved comment for image ${selectedImage}:`, imageComment);
             setSelectedImage(null);
             setImageComment('');
         }
     };
 
+    const handleDateChange = (date) => {
+        setFormData({
+            ...formData,
+            time: date,
+        });
+    };
+
     const handleNextStep = () => {
-        if (currentStep === 0 && formData.title && formData.description) {
-            setCompletedSteps({ ...completedSteps, title: true });
-        } else if (currentStep === 1 && formData.images.length > 0) {
-            setCompletedSteps({ ...completedSteps, images: true });
-        } else if (currentStep === 2 && formData.time) {
-            setCompletedSteps({ ...completedSteps, time: true });
-            createCapsule();  // Only create capsule after time is set
-        }
         if (currentStep < steps.length - 1) {
             setCurrentStep(currentStep + 1);
         }
     };
 
+    const handlePrevStep = () => {
+        if (currentStep > 0) {
+            setCurrentStep(currentStep - 1);
+        }
+    };
+
     const createCapsule = async () => {
-        const imageFormData = new FormData();
+        const capsuleData = new FormData();
+         formData.sharedWith.forEach((userId, index) => {
+    capsuleData.append(`shared_with[${index}]`, userId);
+  });
     
         formData.images.forEach((image, index) => {
-            imageFormData.append(`images[${index}]`, image.file);
-            imageFormData.append(`image_comments[${index}]`, image.comment || '');
-            console.log(`Appending comment for image ${index}:`, image.comment); 
+            capsuleData.append(`images[${index}]`, image.file);
+            capsuleData.append(`image_comments[${index}]`, image.comment || '');
         });
     
-        imageFormData.append('title', formData.title);
-        imageFormData.append('description', formData.description);
-        imageFormData.append('time', formData.time.toISOString());
+        capsuleData.append('title', formData.title);
+        capsuleData.append('description', formData.description);
+        capsuleData.append('time', formData.time.toISOString());
+        capsuleData.append('vision', formData.vision);
+        capsuleData.append('privacy', formData.privacy);
+        capsuleData.append('design', formData.design);
     
-        console.log('FormData:', Object.fromEntries(imageFormData.entries()));
-
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/capsule/upload-images', {
+            const response = await fetch('http://127.0.0.1:8000/api/capsule/create', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                 },
-                body: imageFormData,
+                body: capsuleData,
             });
     
             if (!response.ok) {
@@ -136,11 +132,7 @@ function CapsuleCreation() {
         }
     };
 
-    const presetDates = [
-        { label: '1 Month', value: new Date(new Date().setMonth(new Date().getMonth() + 1)) },
-        { label: '6 Months', value: new Date(new Date().setMonth(new Date().getMonth() + 6)) },
-        { label: '1 Year', value: new Date(new Date().setFullYear(new Date().getFullYear() + 1)) },
-    ];
+
 
     return (
         <div className='w-screen min-h-screen bg-background flex justify-center items-center p-4 overflow-auto'>
@@ -149,8 +141,8 @@ function CapsuleCreation() {
                     <h1 className='text-center flex text-[#FFD4F1] justify-center pt-6 lg:pt-12 text-3xl lg:text-4xl font-black font-lexend'>E-CAPSULE</h1>
                     <div className='flex flex-col justify-center text-left font-lexend text-text font-regular text-base lg:text-[20px] gap-y-2 lg:gap-y-4 m-4 mt-8 lg:mt-20'>
                         {steps.map((step, index) => (
-                            <p key={index} onClick={() => setCurrentStep(index)} className="cursor-pointer flex items-center">
-                                {step} {completedSteps[Object.keys(completedSteps)[index]] && <FontAwesomeIcon icon={faCheckCircle} className="text-green-500 ml-2" />}
+                            <p key={index} onClick={() => setCurrentStep(index)} className={`cursor-pointer flex items-center ${currentStep === index ? 'font-bold' : ''}`}>
+                                {step}
                             </p>
                         ))}
                     </div>
@@ -200,7 +192,7 @@ function CapsuleCreation() {
                                         <tbody>
                                             {formData.images.map((image, index) => (
                                                 <tr key={index} className="border-t border-[#A3688F] text-text">
-                                                    <td className="p-2">{image.name}</td>
+                                                    <td className="p-2">{image.file.name}</td>
                                                     <td className="p-2">
                                                         <button
                                                             onClick={() => removeImage(index)}
@@ -230,75 +222,108 @@ function CapsuleCreation() {
                                         dateFormat="MMMM d, yyyy h:mm aa"
                                         className='mb-4 w-full max-w-md lg:p-2 shadow-secondary rounded-[100px] font-light font-lexend bg-background text-center text-text text-base border-[#A3688F] lg:text-xl border-2 focus:outline-none focus:ring-2 focus:ring-[#A3688F]'
                                     />
-                                    <div className="flex justify-center gap-4 mt-4">
-                                        {presetDates.map((preset, index) => (
-                                            <button
-                                                key={index}
-                                                onClick={() => handleDateChange(preset.value)}
-                                                className="px-4 py-2 bg-[#A3688F] text-white rounded-full hover:bg-[#8A4B6A] transition duration-300"
-                                            >
-                                                {preset.label}
-                                            </button>
-                                        ))}
-                                    </div>
                                 </div>
                             </>
                         )}
-
-{currentStep === 3 && (
-            <>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-8">
-                    {formData.images.length > 0 ? (
-                        formData.images.map((image, index) => (
-                            <div key={index} className="relative group">
-                                <img
-                                    src={URL.createObjectURL(image.file)}
-                                    alt={`Uploaded ${index}`}
-                                    className="w-full h-auto rounded-lg shadow-lg cursor-pointer"
-                                    onClick={() => {
-                                        setSelectedImage(index);
-                                        setImageComment(image.comment || '');
-                                    }}
-                                />
-                                <button
-                                    onClick={() => removeImage(index)}
-                                    className="absolute top-2 right-2 text-red-500 hover:text-red-700"
-                                >
-                                    <FontAwesomeIcon icon={faTrash} />
-                                </button>
-                                {image.comment && (
-                                    <div className="absolute bottom-2 right-2 text-green-500">
-                                        <FontAwesomeIcon icon={faComment} />
+                        {currentStep === 3 && (
+                            <>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-8">
+                                    {formData.images.map((image, index) => (
+                                        <div key={index} className="relative group">
+                                            <img
+                                                src={URL.createObjectURL(image.file)}
+                                                alt={`Uploaded ${index}`}
+                                                className="w-full h-auto rounded-lg shadow-lg cursor-pointer"
+                                                onClick={() => selectImage(index)}
+                                            />
+                                            {image.comment && (
+                                                <div className="absolute bottom-2 right-2 text-green-500">
+                                                    <FontAwesomeIcon icon={faComment} />
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                {selectedImage !== null && (
+                                    <div className="mt-4">
+                                        <textarea
+                                            value={imageComment}
+                                            onChange={(e) => setImageComment(e.target.value)}
+                                            className="w-full p-2 border rounded"
+                                            placeholder="Add a comment to this image..."
+                                        />
+                                        <button
+                                            onClick={saveImageComment}
+                                            className="mt-2 px-4 py-2 bg-[#A3688F] text-white rounded-full hover:bg-[#8A4B6A] transition duration-300"
+                                        >
+                                            Save Comment
+                                        </button>
                                     </div>
                                 )}
-                            </div>
-                        ))
-                    ) : (
-                        <p className="col-span-4 text-center text-text">No images uploaded yet.</p>
-                    )}
-                </div>
-                {selectedImage !== null && (
-                    <div className="mt-4">
-                        <textarea
-                            value={imageComment}
-                            onChange={(e) => setImageComment(e.target.value)}
-                            className="w-full p-2 border rounded"
-                            placeholder="Add a comment to this image..."
-                        />
-                        <button
-                            onClick={saveImageComment}
-                            className="mt-2 px-4 py-2 bg-[#A3688F] text-white rounded-full hover:bg-[#8A4B6A] transition duration-300"
-                        >
-                            Save Comment
-                        </button>
-                    </div>
-                )}
-            </>
-        )}
-                      
+                            </>
+                        )}
+                        {currentStep === 4 && (
+                            <>
+                                <p className='text-text font-regular text-xl lg:text-2xl pb-4'>VISION</p>
+                                <textarea
+                                    name="vision"
+                                    value={formData.vision}
+                                    onChange={handleInputChange}
+                                    placeholder="Share your thoughts, expectations, or considerations for this time capsule..."
+                                    className='mb-4 w-full max-w-md lg:p-2 resize-none h-32 lg:h-[240px] shadow-secondary rounded-[10px] font-light font-lexend bg-background text-left text-text text-base border-[#A3688F] lg:text-lg border-2 focus:outline-none focus:ring-2 focus:ring-[#A3688F]'
+                                ></textarea>
+                            </>
+                        )}
+                        {currentStep === 5 && (
+                            <>
+                                <p className='text-text font-regular text-xl lg:text-2xl pb-4'>PRIVACY SETTINGS</p>
+                                <select
+                                    name="privacy"
+                                    value={formData.privacy}
+                                    onChange={handleInputChange}
+                                    className='mb-4 w-full max-w-md lg:p-2 shadow-secondary rounded-[100px] font-light font-lexend bg-background text-center text-text text-base border-[#A3688F] lg:text-xl border-2 focus:outline-none focus:ring-2 focus:ring-[#A3688F]'
+                                >
+                                    <option value="private">Private</option>
+                                    <option value="friends">Friends Only</option>
+                                    <option value="public">Public</option>
+                                </select>
+                            </>
+                        )}
+                        {currentStep === 6 && (
+    <div className="h-full flex flex-col">
+        <div className="flex-1 overflow-hidden">
+            <CapsuleDesignSelector
+                value={formData.design}
+                onChange={handleInputChange}
+            />
+        </div>
+    </div>
+)}
+{currentStep === 7 && (
+    <>
+
+        <CapsulePreview formData={formData} />
+    </>
+)}
+{currentStep === 8 && (
+  <CapsuleSharing 
+    onShareSelectionChange={(selectedFriends) => 
+      setFormData(prev => ({ ...prev, sharedWith: selectedFriends }))
+    }
+  />
+)}
                     </div>
 
-                    <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-4">
+                    {currentStep > 0 && (
+                            <button 
+                                className="font-lexend text-text font-extralight text-lg tracking-widest relative group"
+                                onClick={handlePrevStep}
+                            >
+                                Previous
+                                <span className="absolute left-0 right-0 bottom-[-5px] h-[2px] w-0 bg-[#A3688F] transition-all group-hover:w-full"></span>
+                            </button>
+                        )}
                         {currentStep < steps.length - 1 && (
                             <button 
                                 className="font-lexend text-text font-extralight text-lg tracking-widest relative group"
@@ -306,6 +331,14 @@ function CapsuleCreation() {
                             >
                                 Next
                                 <span className="absolute left-0 right-0 bottom-[-5px] h-[2px] w-0 bg-[#A3688F] transition-all group-hover:w-full"></span>
+                            </button>
+                        )}
+                        {currentStep === steps.length - 1 && (
+                            <button 
+                                className="font-lexend text-white font-bold text-lg tracking-widest relative group bg-[#A3688F] px-6 py-2 rounded-full hover:bg-[#8A4B6A] transition duration-300"
+                                onClick={createCapsule}
+                            >
+                                Save Capsule
                             </button>
                         )}
                     </div>

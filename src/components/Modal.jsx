@@ -1,10 +1,86 @@
-import React, { useState, useCallback } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faEnvelope, faPencilAlt, faTimes, faLock, faEye } from '@fortawesome/free-solid-svg-icons';
+import React, { useState, useCallback, useRef, forwardRef, useEffect } from 'react';
+import { Card } from './Card';
+import { validateProfileForm } from './validations/ProfileValidations';
+import { 
+  User, 
+  Mail, 
+  PencilLine, 
+  X, 
+  Lock, 
+  Eye, 
+  EyeOff, 
+  Camera 
+} from 'lucide-react';
+
+const Input = forwardRef(({ icon: Icon, error, rightIcon, ...props }, ref) => (
+  <div className="relative w-full flex flex-col">
+    <div className="relative w-full">
+      <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent pointer-events-none z-10" />
+      <input
+        ref={ref}
+        {...props}
+        className={`w-full bg-background text-text rounded-lg border-2 
+                 px-10 py-2 focus:outline-none transition-all duration-300
+                 placeholder:text-primary/50 ${
+                   error 
+                     ? 'border-red-500 focus:border-red-600' 
+                     : 'border-secondary/30 focus:border-accent'
+                 } ${rightIcon ? 'pr-12' : ''}`}
+      />
+      {rightIcon && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+          {rightIcon}
+        </div>
+      )}
+    </div>
+    {error && (
+      <div className="min-h-[20px] mt-1">
+        <p className="text-sm text-red-500">{error}</p>
+      </div>
+    )}
+  </div>
+));
+const PasswordInput = forwardRef(({ error, value, onChange, onBlur, name, placeholder }, ref) => {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
+  const togglePasswordVisibility = (e) => {
+    e.preventDefault();
+    setIsPasswordVisible(!isPasswordVisible);
+  };
+
+  const visibilityIcon = (
+    <button
+      type="button"
+      onClick={togglePasswordVisibility}
+      className="text-accent/70 hover:text-accent transition-colors"
+    >
+      {isPasswordVisible ? (
+        <EyeOff className="w-5 h-5" />
+      ) : (
+        <Eye className="w-5 h-5" />
+      )}
+    </button>
+  );
+
+  return (
+    <Input
+      ref={ref}
+      icon={Lock}
+      type={isPasswordVisible ? 'text' : 'password'}
+      name={name}
+      value={value}
+      onChange={onChange}
+      onBlur={onBlur}
+      placeholder={placeholder}
+      error={error}
+      rightIcon={visibilityIcon}
+    />
+  );
+});
 
 function Modal({ show, onClose, onSave, initialData }) {
-  const [formData, setFormData] = useState(initialData || {
-    firstName: '', 
+  const [formData, setFormData] = useState({
+    firstName: '',
     lastName: '',
     email: '',
     bio: '',
@@ -20,49 +96,125 @@ function Modal({ show, onClose, onSave, initialData }) {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
+  const [touchedFields, setTouchedFields] = useState({});
+  const [validationErrors, setValidationErrors] = useState({});
+  const [serverErrors, setServerErrors] = useState({});
+
+  const firstNameRef = useRef(null);
+  const lastNameRef = useRef(null);
+  const emailRef = useRef(null);
+  const bioRef = useRef(null);
+  const newPasswordRef = useRef(null);
+  const confirmNewPasswordRef = useRef(null);
+
+  useEffect(() => {
+    if (show) {
+      fetchUserProfile();
+    }
+  }, [show]);
+  const fetchUserProfile = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch('http://127.0.0.1:8000/api/get-profile', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setFormData(prevData => ({
+        ...prevData,
+        firstName: data.user.firstName,
+        lastName: data.user.lastName,
+        email: data.user.email,
+        bio: data.user.bio,
+      }));
+
+      if (data.user.profileImage) {
+        setImagePreview(`http://127.0.0.1:8000/storage/${data.user.profileImage}`);
+      }
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+      setErrors(prev => ({ ...prev, general: 'Failed to load user profile' }));
+    }
+  };
+
   const handleChange = useCallback((e) => {
     const { name, value, type, files } = e.target;
     if (type === "file") {
       const file = files[0];
       setFormData(prev => ({ ...prev, image: file }));
       setImagePreview(URL.createObjectURL(file));
+      
+      // Validate file size immediately
+      if (file.size > 2 * 1024 * 1024) {
+        setValidationErrors(prev => ({ ...prev, image: 'Image size must not exceed 2MB' }));
+      } else {
+        setValidationErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.image;
+          return newErrors;
+        });
+      }
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
+      
+      // Clear error when user starts typing
+      if (touchedFields[name]) {
+        const errors = validateProfileForm({ ...formData, [name]: value });
+        setValidationErrors(prev => ({ ...prev, [name]: errors[name] }));
+      }
     }
-  }, []);
+  }, [formData, touchedFields]);
+
+  const handleBlur = useCallback((fieldName) => {
+    setTouchedFields(prev => ({ ...prev, [fieldName]: true }));
+    const errors = validateProfileForm(formData);
+    setValidationErrors(prev => ({ ...prev, [fieldName]: errors[fieldName] }));
+  }, [formData]);
+
+
 
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
-    if (formData.newPassword) {
-      if (formData.newPassword !== formData.confirmNewPassword) {
-        setErrors(prev => ({ ...prev, password: "New passwords do not match" }));
-        return;
-      }
+    
+    // Mark all fields as touched
+    const allFields = Object.keys(formData).reduce((acc, key) => {
+      acc[key] = true;
+      return acc;
+    }, {});
+    setTouchedFields(allFields);
+
+    // Validate all fields
+    const errors = validateProfileForm(formData);
+    setValidationErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      setErrors(prev => ({ ...prev, general: 'Please correct the errors before submitting' }));
+      return;
     }
+
     setErrors({});
-    console.log("Form Submitted with Data:", formData);
     setIsConfirming(true);
   }, [formData]);
 
   const handleConfirm = useCallback(async () => {
     const formDataToSend = new FormData();
-    formDataToSend.append('firstName', formData.firstName);
-    formDataToSend.append('lastName', formData.lastName);
-    formDataToSend.append('email', formData.email);
-    formDataToSend.append('bio', formData.bio);
+    Object.keys(formData).forEach(key => {
+      if (formData[key] !== null) {
+        formDataToSend.append(key, formData[key]);
+      }
+    });
     formDataToSend.append('confirmPassword', confirmPassword);
-    if (formData.newPassword) {
-      formDataToSend.append('newPassword', formData.newPassword);
-    }
-    
-    if (formData.image) {
-      formDataToSend.append('image', formData.image);
-    }
-  
+
     try {
       const token = localStorage.getItem('access_token');
-      console.log('Token:', token);
-  
       const response = await fetch('http://127.0.0.1:8000/api/update-profile', {
         method: 'POST',
         body: formDataToSend,
@@ -72,17 +224,18 @@ function Modal({ show, onClose, onSave, initialData }) {
           'X-Requested-With': 'XMLHttpRequest',
         },
       });
-  
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-  
+
       const data = await response.json();
-  
       if (!response.ok) {
+        if (response.status === 422) {
+          // Handle validation errors
+          setServerErrors(data.errors || {});
+          setIsConfirming(false);
+          return;
+        }
         throw new Error(data.error || data.message || `Error: ${response.statusText}`);
       }
-  
-      console.log('Profile updated:', data);
+
       setSuccessMessage('Profile updated successfully!');
       onSave(data.user);
       setTimeout(() => {
@@ -90,73 +243,99 @@ function Modal({ show, onClose, onSave, initialData }) {
         onClose();
       }, 2000);
     } catch (error) {
-      setErrors(prevErrors => ({ ...prevErrors, general: error.message }));
+      setErrors(prev => ({ ...prev, general: error.message }));
       setIsConfirming(false);
     }
   }, [formData, confirmPassword, onSave, onClose]);
 
-  const handleConfirmSubmit = useCallback((e) => {
-    e.preventDefault();
-    handleConfirm();
-  }, [handleConfirm]);
-
-  const togglePasswordVisibility = () => setIsPasswordVisible(prev => !prev);
-
   if (!show) return null;
+  
+  
 
   return (
-    <div className="fixed inset-0 bg-background bg-opacity-75 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-gradient-to-br from-[#1E1E1E] to-[#2D2D2D] p-8 rounded-3xl w-11/12 max-w-2xl shadow-custom relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#A3688F] via-[#FFD4F1] to-[#A3688F] animate-gradient"></div>
-        
-        <button 
-          onClick={onClose}
-          className="absolute top-4 right-4 text-[#FFD4F1] hover:text-[#A3688F] transition-colors duration-300"
-        >
-          <FontAwesomeIcon icon={faTimes} size="lg" />
-        </button>
+    <div className="fixed inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-3xl bg-background p-6 rounded-2xl shadow-custom">
+        {/* Header */}
+        <div className="relative mb-8">
+          <h2 className="text-2xl font-semibold text-center text-text">
+            Edit Your Profile
+          </h2>
+          <button 
+            onClick={onClose}
+            className="absolute right-0 top-0 text-primary/70 hover:text-primary transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
 
-        <h2 className="text-3xl font-bold text-[#FFD4F1] mb-6 font-lexend text-center">Edit Your Profile</h2>
+        {successMessage && (
+          <div className="mb-4 p-3 bg-accent/20 text-text rounded-lg text-center">
+            {successMessage}
+          </div>
+        )}
+
+        {errors.general && (
+          <div className="mb-4 p-3 bg-red-500/20 text-red-300 rounded-lg text-center">
+            {errors.general}
+          </div>
+        )}
 
         {isConfirming ? (
-          <form onSubmit={handleConfirmSubmit} className="space-y-6">
-            <div className="relative">
-              <FontAwesomeIcon
-                icon={faLock}
-                className="absolute top-1/2 left-4 transform -translate-y-1/2 text-[#A3688F]"
-              />
-              <input
-                type="password"
-                name="confirmPassword"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Enter your current password"
-                className="p-3 pl-12 w-full rounded-full font-light tracking-wide font-lexend bg-[#1E1E1E] text-[#FFD4F1] text-base border-2 border-[#A3688F] focus:border-[#FFD4F1] outline-none placeholder-[#FFD4F1] placeholder-opacity-50 transition-all duration-300"
-              />
-            </div>
-
-            <div className="flex justify-center items-center space-x-6 mt-8">
+          <form onSubmit={(e) => { e.preventDefault(); handleConfirm(); }} className="space-y-6">
+            <Input
+              icon={Lock}
+              type="password"
+              name="confirmPassword"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Enter your current password to confirm changes"
+            />
+            <div className="flex justify-end space-x-4">
+              <button
+                type="button"
+                onClick={() => setIsConfirming(false)}
+                className="px-6 py-2 rounded-lg border-2 border-btnOutline text-primary
+                         hover:bg-secondary/10 transition-all duration-300"
+              >
+                Back
+              </button>
               <button
                 type="submit"
-                className="font-lexend text-background font-light text-sm tracking-widest relative group text-center px-6 py-2 rounded-full bg-gradient-to-r from-[#A3688F] to-[#FFD4F1] hover:from-[#FFD4F1] hover:to-[#A3688F] transition-all duration-300"
+                className="px-6 py-2 rounded-lg bg-button
+                         hover:bg-accent text-background transition-all duration-300"
               >
-                CONFIRM CHANGES
+                Confirm Changes
               </button>
+              
             </div>
           </form>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="flex gap-6">
-              {/* Image Upload Section */}
-              <div className="flex flex-col items-center">
-                <label className="cursor-pointer mb-2">
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Profile Image Section */}
+            <div className="flex justify-center mb-8">
+              <div className="relative">
+                <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-secondary/30">
                   {imagePreview ? (
-                    <img src={imagePreview} alt="Preview" className="w-32 h-32 rounded-full object-cover" />
+                    <img
+                      src={imagePreview}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
-                    <div className="w-32 h-32 border-2 border-[#A3688F] rounded-full flex items-center justify-center text-[#A3688F]">
-                      <span>Select Image</span>
+                    <div className="w-full h-full bg-secondary flex items-center justify-center">
+                      <User className="w-16 h-16 text-primary/50" />
                     </div>
                   )}
+                  {validationErrors.image && (
+                <p className="absolute -bottom-6 text-sm text-red-500">
+                  {validationErrors.image}
+                </p>
+              )}
+                </div>
+                <label className="absolute bottom-0 right-0 w-10 h-10 bg-button rounded-full 
+                                flex items-center justify-center cursor-pointer
+                                hover:bg-accent transition-colors duration-300">
+                  <Camera className="w-5 h-5 text-background" />
                   <input
                     type="file"
                     accept="image/*"
@@ -165,108 +344,129 @@ function Modal({ show, onClose, onSave, initialData }) {
                   />
                 </label>
               </div>
-
-              {/* Name Fields */}
-              <div className="flex flex-col w-full space-y-6">
-                {/* First Name Field */}
-                <div className="relative">
-                  <FontAwesomeIcon icon={faUser} className="absolute top-1/2 left-4 transform -translate-y-1/2 text-[#A3688F]" />
-                  <input
-                    type="text"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    placeholder="Enter Your First Name"
-                    className="p-3 pl-12 w-full rounded-full font-light tracking-wide font-lexend bg-[#1E1E1E] text-[#FFD4F1] text-base border-2 border-[#A3688F] focus:border-[#FFD4F1] outline-none placeholder-[#FFD4F1] placeholder-opacity-50 transition-all duration-300"
-                  />
-                </div>
-
-                {/* Last Name Field */}
-                <div className="relative">
-                  <FontAwesomeIcon icon={faUser} className="absolute top-1/2 left-4 transform -translate-y-1/2 text-[#A3688F]" />
-                  <input
-                    type="text"
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                    placeholder="Enter Your Last Name"
-                    className="p-3 pl-12 w-full rounded-full font-light tracking-wide font-lexend bg-[#1E1E1E] text-[#FFD4F1] text-base border-2 border-[#A3688F] focus:border-[#FFD4F1] outline-none placeholder-[#FFD4F1] placeholder-opacity-50 transition-all duration-300"
-                  />
-                </div>
-              </div>
             </div>
 
-            {/* Email Field */}
-            <div className="relative">
-              <FontAwesomeIcon icon={faEnvelope} className="absolute top-1/2 left-4 transform -translate-y-1/2 text-[#A3688F]" />
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
+            {/* Form Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input
+                ref={firstNameRef}
+                icon={User}
+                type="text"
+                name="firstName"
+                value={formData.firstName}
                 onChange={handleChange}
-                placeholder="Enter Your Email"
-                className="p-3 pl-12 w-full rounded-full font-light tracking-wide font-lexend bg-[#1E1E1E] text-[#FFD4F1] text-base border-2 border-[#A3688F] focus:border-[#FFD4F1] outline-none placeholder-[#FFD4F1] placeholder-opacity-50 transition-all duration-300"
+                onBlur={() => handleBlur('firstName')}
+                placeholder="First Name"
+                error={touchedFields.firstName ? validationErrors.firstName : ''}
               />
+              <Input
+  ref={lastNameRef}
+  icon={User}
+  type="text"
+  name="lastName"
+  value={formData.lastName}
+  onChange={handleChange}
+  onBlur={() => handleBlur('lastName')}
+  placeholder="Last Name"
+  error={touchedFields.lastName ? validationErrors.lastName : ''}
+/>
             </div>
+
+           <Input
+              ref={emailRef}
+              icon={Mail}
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              onBlur={() => handleBlur('email')}
+              placeholder="Email Address"
+              error={touchedFields.email ? (validationErrors.email || serverErrors.email) : ''}
+            />
+
 
             {/* Bio Field */}
             <div className="relative">
-              <FontAwesomeIcon icon={faPencilAlt} className="absolute top-1/2 left-4 transform -translate-y-1/2 text-[#A3688F]" />
+              <PencilLine className="absolute left-3 top-3 w-5 h-5 text-accent" />
               <textarea
+                ref={bioRef}
                 name="bio"
                 value={formData.bio}
                 onChange={handleChange}
-                placeholder="Tell us about yourself"
-                className="p-3 pl-12 w-full h-32 rounded-xl font-light tracking-wide font-lexend bg-[#1E1E1E] text-[#FFD4F1] text-base border-2 border-[#A3688F] focus:border-[#FFD4F1] outline-none placeholder-[#FFD4F1] placeholder-opacity-50 transition-all duration-300"
+                onBlur={() => handleBlur('bio')}
+                placeholder="Tell us about yourself..."
+                className={`w-full h-32 bg-background text-text rounded-lg border-2 
+                         px-10 py-2 focus:outline-none transition-all duration-300 
+                         placeholder:text-primary/50 resize-none ${
+                           validationErrors.bio 
+                             ? 'border-red-500 focus:border-red-600' 
+                             : 'border-secondary/30 focus:border-accent'
+                         }`}
               />
+              {touchedFields.bio && validationErrors.bio && (
+                <p className="mt-1 text-sm text-red-500">{validationErrors.bio}</p>
+              )}
             </div>
 
             {/* Password Fields */}
             <div className="space-y-4">
               <div className="relative">
-                <FontAwesomeIcon icon={faLock} className="absolute top-1/2 left-4 transform -translate-y-1/2 text-[#A3688F]" />
-                <input
-                  type={isPasswordVisible ? 'text' : 'password'}
-                  name="newPassword"
-                  value={formData.newPassword}
-                  onChange={handleChange}
-                  placeholder="New Password"
-                  className="p-3 pl-12 w-full rounded-full font-light tracking-wide font-lexend bg-[#1E1E1E] text-[#FFD4F1] text-base border-2 border-[#A3688F] focus:border-[#FFD4F1] outline-none placeholder-[#FFD4F1] placeholder-opacity-50 transition-all duration-300"
-                />
+              <PasswordInput
+                ref={newPasswordRef}
+                name="newPassword"
+                value={formData.newPassword}
+                onChange={handleChange}
+                onBlur={() => handleBlur('newPassword')}
+                placeholder="New Password"
+                error={touchedFields.newPassword ? validationErrors.newPassword : ''}
+              />
                 <button
                   type="button"
-                  onClick={togglePasswordVisibility}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#A3688F] cursor-pointer"
+                  onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-accent/70 
+                           hover:text-accent transition-colors"
                 >
-                  <FontAwesomeIcon icon={faEye} />
+                  
                 </button>
               </div>
-
-              {/* Confirm Password Field */}
-              <div className="relative">
-                <FontAwesomeIcon icon={faLock} className="absolute top-1/2 left-4 transform -translate-y-1/2 text-[#A3688F]" />
-                <input
-                  type={isPasswordVisible ? 'text' : 'password'}
-                  name="confirmNewPassword"
-                  value={formData.confirmNewPassword}
-                  onChange={handleChange}
-                  placeholder="Confirm New Password"
-                  className="p-3 pl-12 w-full rounded-full font-light tracking-wide font-lexend bg-[#1E1E1E] text-[#FFD4F1] text-base border-2 border-[#A3688F] focus:border-[#FFD4F1] outline-none placeholder-[#FFD4F1] placeholder-opacity-50 transition-all duration-300"
-                />
-              </div>
+              
+              <PasswordInput
+                ref={confirmNewPasswordRef}
+                name="confirmNewPassword"
+                value={formData.confirmNewPassword}
+                onChange={handleChange}
+                onBlur={() => handleBlur('confirmNewPassword')}
+                placeholder="Confirm New Password"
+                error={touchedFields.confirmNewPassword ? validationErrors.confirmNewPassword : ''}
+              />
             </div>
 
-            <div className="flex justify-center items-center space-x-6 mt-8">
+            {errors.password && (
+              <div className="text-red-400 text-sm mt-2">
+                {errors.password}
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-2 rounded-lg border-2 border-btnOutline text-primary
+                         hover:bg-secondary/10 transition-all duration-300"
+              >
+                Cancel
+              </button>
               <button
                 type="submit"
-                className="font-lexend text-background font-light text-sm tracking-widest relative group text-center px-6 py-2 rounded-full bg-gradient-to-r from-[#A3688F] to-[#FFD4F1] hover:from-[#FFD4F1] hover:to-[#A3688F] transition-all duration-300"
+                className="px-6 py-2 rounded-lg bg-button
+                         hover:bg-accent text-background transition-all duration-300"
               >
-                SAVE CHANGES
+                Save Changes
               </button>
             </div>
           </form>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

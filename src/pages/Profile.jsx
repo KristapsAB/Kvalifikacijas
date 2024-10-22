@@ -1,273 +1,423 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCog, faEllipsisV } from '@fortawesome/free-solid-svg-icons';
-import Modal from '../components/Modal';
+import { Settings, MoreVertical, Edit2, History, Camera, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import Modal from '../components/Modal'; 
+import AnimatedCapsule from '../components/AnimatedCapsule';
 
-function Profile() {
-  const scrollContainerRef = useRef(null);
-  const [isScrollable, setIsScrollable] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [showSettings, setShowSettings] = useState(false); 
+
+const Profile = () => {
   const [user, setUser] = useState(null);
-  const [errors, setError] = useState({});
+  const [friends, setFriends] = useState([]);
+  const [errors, setErrors] = useState({});
   const [friendCount, setFriendCount] = useState(0);
   const [capsuleCount, setCapsuleCount] = useState(0);
-
+  const [showSettings, setShowSettings] = useState(false);
+  const [imgSrc, setImgSrc] = useState('/images/DefaultAvatar.jpg');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedCapsule, setSelectedCapsule] = useState(null);
+  const [showCapsule, setShowCapsule] = useState(false);
   const navigate = useNavigate();
+  const settingsRef = useRef(null);
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
 
-  const storyImages = [
-    '/images/story1.jpg',
-    '/images/story2.jpg',
-    '/images/story3.jpg',
-    '/images/story4.jpg',
-    '/images/story5.jpg',
-    '/images/story6.jpg',
-    '/images/story7.jpg',
-    '/images/story8.jpg',
-    '/images/story9.jpg',
-    '/images/story10.jpg',
-    '/images/story11.jpg',
-    '/images/story12.jpg',
+  const capsules = [
+    {
+      id: 1,
+      title: 'Family Gathering 2024',
+      daysLeft: 99,
+      images: [
+        {
+          src: '/images/bgimage5.jpg',
+          caption: 'Family BBQ',
+          date: 'June 15, 2024'
+        },
+        {
+          src: '/images/bgCapsule.jpg',
+          caption: 'Pool Party',
+          date: 'June 16, 2024'
+        },
+      ]
+    },
+    {
+      id: 2,
+      title: 'Vacation 2023',
+      daysLeft: 150,
+      images: [
+        {
+          src: '/images/vacation1.jpg',
+          caption: 'Beach Time',
+          date: 'August 5, 2023'
+        },
+        {
+          src: '/images/vacation2.jpg',
+          caption: 'Mountain Hiking',
+          date: 'August 7, 2023'
+        },
+      ]
+    }
   ];
 
   useEffect(() => {
-    document.body.style.overflow = 'auto';
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, []);
-
-  useEffect(() => {
     const token = localStorage.getItem('access_token');
+    console.log('Access Token:', token);
     if (!token) {
-      setError('No access token found');
+      setErrors(prev => ({ ...prev, auth: 'No access token found' }));
       navigate('/login');
       return;
     }
 
-    fetch('http://127.0.0.1:8000/api/user', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-    })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.json();
-      })
-      .then(data => {
+    const fetchUserData = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/user', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+        const data = await response.json();
         setUser(data);
-        console.log('User data:', data);
-
-        return fetch('http://127.0.0.1:8000/api/friends/count', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        });
-      })
-      .then(response => response.json())
-      .then(data => {
-        setFriendCount(data.count);
-
-        return fetch('http://127.0.0.1:8000/api/capsules/count', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        });
-      })
-      .then(response => response.json())
-      .then(data => {
-        setCapsuleCount(data.count);
-      })
-      .catch(err => {
-        setError('Failed to fetch user data');
+        if (data.profile_image) {
+          setImgSrc(`http://127.0.0.1:8000/storage/${data.profile_image}`);
+        }
+      } catch (err) {
+        setErrors(prev => ({ ...prev, user: 'Failed to fetch user data' }));
         console.error('Fetch error:', err);
-      });
-  }, [navigate]);
-
-  useEffect(() => {
-    const checkIfScrollable = () => {
-      if (scrollContainerRef.current) {
-        setIsScrollable(
-          scrollContainerRef.current.scrollWidth > scrollContainerRef.current.clientWidth
-        );
       }
     };
-    checkIfScrollable();
-    window.addEventListener('resize', checkIfScrollable);
-    return () => window.removeEventListener('resize', checkIfScrollable);
+
+    const fetchAcceptedFriends = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/friends/accepted', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setFriends(data);
+          setFriendCount(data.length);
+        } else {
+          console.error('Received non-array friends data:', data);
+          setFriends([]);
+          setFriendCount(0);
+        }
+      } catch (err) {
+        setErrors(prev => ({ ...prev, friends: 'Error fetching friends' }));
+        console.error('Error fetching friends:', err);
+      }
+    };
+
+    const fetchCounts = async () => {
+      try {
+        const [friendsRes, capsulesRes] = await Promise.all([
+          fetch('http://127.0.0.1:8000/api/friends/count', {
+            headers: { 'Authorization': `Bearer ${token}` },
+          }),
+          fetch('http://127.0.0.1:8000/api/capsules/count', {
+            headers: { 'Authorization': `Bearer ${token}` },
+          })
+        ]);
+
+        const [friendsData, capsulesData] = await Promise.all([
+          friendsRes.json(),
+          capsulesRes.json()
+        ]);
+
+        setFriendCount(friendsData.count);
+        setCapsuleCount(capsulesData.count);
+      } catch (err) {
+        setErrors(prev => ({ ...prev, counts: 'Error fetching counts' }));
+        console.error('Error fetching counts:', err);
+      }
+    };
+
+    fetchUserData();
+    fetchAcceptedFriends();
+    fetchCounts();
+  }, [navigate]);
+
+  // Click outside settings handler
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target)) {
+        setShowSettings(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const toggleModal = () => setShowModal(!showModal);
-
-  const handleSave = (e) => {
-    e.preventDefault();
-    console.log("Profile details saved");
-    setShowModal(false);
-  };
-
-  const toggleSettings = () => {
-    setShowSettings(!showSettings);
-  };
-
-  const handleProfileVisibilityChange = (visibility) => {
+  const handlePrivacyChange = async (privacy) => {
     const token = localStorage.getItem('access_token');
-    fetch('http://127.0.0.1:8000/api/user/privacy', {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({ privacy: visibility.toLowerCase().replace(' ', '_') })
-    })
-    .then(response => response.json())
-    .then(data => {
-      console.log(`Profile visibility set to: ${data.privacy}`);
+    console.log(token);
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/user/privacy', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ privacy: privacy.toLowerCase().replace(' ', '_') })
+      });
+      const data = await response.json();
+      setUser(prev => ({ ...prev, privacy: data.privacy }));
       setShowSettings(false);
-      setUser(prevUser => ({ ...prevUser, privacy: data.privacy }));
-    })
-    .catch(error => {
-      console.error('Error updating privacy settings:', error);
-    });
+    } catch (err) {
+      console.error('Error updating privacy:', err);
+    }
   };
 
+  const handleEditProfile = () => setShowEditModal(true);
+  const handleCloseModal = () => setShowEditModal(false);
+
+  const handleSaveProfile = (updatedUser) => {
+    setUser(prevUser => ({
+      ...prevUser,
+      name: `${updatedUser.firstName} ${updatedUser.lastName}`.trim(),
+      email: updatedUser.email,
+      bio: updatedUser.bio
+    }));
+    if (updatedUser.image) {
+      setImgSrc(URL.createObjectURL(updatedUser.image));
+    }
+    setShowEditModal(false);
+  };
+
+  const handleCapsuleClick = (capsule) => {
+    setSelectedCapsule(capsule);
+    setShowCapsule(true);
+  };
+
+  const handleCloseCapsule = () => {
+    setSelectedCapsule(null);
+    setShowCapsule(false);
+  };
   if (!user) {
-    return <p className='text-center font-lexend text-2xl md:text-4xl pt-[25%]'>Loading...</p>; 
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-2xl text-gray-600">Loading...</div>
+      </div>
+    );
   }
+  const handleViewAllFriends = () => {
+    setShowFriendsModal(true);
+  };
+
+  const handleCloseFriendsModal = () => {
+    setShowFriendsModal(false);
+  };
+
 
   return (
-    <div className='min-h-screen w-full bg-background flex justify-center p-4 md:p-10'>
-      <div className='w-full max-w-7xl bg-background flex flex-col justify-center items-center'>
-        <div className='bg-background flex flex-col items-center w-full h-full p-4 md:p-8 shadow-custom rounded-3xl'>
-          <div className='flex bg-background flex-col md:flex-row items-center md:items-start w-full md:w-6/6 justify-center space-y-4 md:space-y-0 md:space-x-4'>
-            <button className='rounded-full w-24 h-24 md:w-32 md:h-32 bg-background border-[#FF95DD] border-4 flex justify-center shadow-b2779f-custom'>
-              <img
-                src={user && user.profile_image ? user.profile_image : `${process.env.PUBLIC_URL}/images/DefaultAvatar.jpg`}
-                alt="Profile"
-                className="w-full h-full object-cover rounded-full"
-              />
-            </button>
-            <div className="flex flex-col items-center md:items-start md:pl-4 pt-2 md:pt-4">
-              <h1 className='text-text font-lexend font-black text-xl md:text-2xl'>{user ? user.name : 'User'}</h1>
-              <div className='flex space-x-4 pt-2'>
-                <button className='text-text font-lexend font-medium text-sm hover:underline'>
+    <div className="min-h-screen bg-background font-lexend text-text">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="bg-background rounded-2xl shadow-custom p-6 md:p-8">
+          
+          <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
+            <div className="relative group">
+              <div className="w-32 h-32 rounded-full overflow-hidden ring-4 ring-pink-300 shadow-lg">
+                <img
+                  src={imgSrc}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                  onError={() => setImgSrc('/images/DefaultAvatar.jpg')}
+                />
+              </div>
+              <button className="absolute bottom-0 right-0 bg-pink-500 p-2 rounded-full text-text hover:bg-pink-600 transition-colors">
+                <Camera size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 text-center md:text-left">
+              <h1 className="text-2xl font-bold text-text">{user.name}</h1>
+              <div className="mt-2 space-x-6">
+                <button className=" hover:text-secondary transition-colors">
                   {capsuleCount} Capsules
                 </button>
-                <button className='text-text font-lexend font-medium text-sm hover:underline'>
+                <button className=" hover:text-secondary transition-colors">
                   {friendCount} Friends
                 </button>
               </div>
-              <p className='text-text font-lexend font-medium text-sm mt-2'>
+              <p className="mt-2 ">
                 Privacy: {user.privacy ? user.privacy.charAt(0).toUpperCase() + user.privacy.slice(1).replace('_', ' ') : 'Public'}
               </p>
             </div>
-            <div className='flex flex-wrap justify-center md:justify-start gap-2 mt-4 md:mt-0 relative'>
+
+            <div className="flex flex-wrap gap-3 justify-center md:justify-end">
               <button
-                onClick={toggleModal}
-                className='flex justify-center items-center px-4 py-2 rounded-xl text-text font-lexend font-regular border-[#FF95DD] border-2 shadow-b2779f-custom'
+                onClick={handleEditProfile}
+                className="flex items-center gap-2 px-4 py-2 bg-pink-500 border-2 border-btnOutline rounded-xl  hover:text-gray-400  transition-colors"
               >
+                <Edit2 size={18} />
                 Edit Profile
               </button>
-              <button className='flex justify-center items-center px-4 py-2 rounded-xl text-text font-lexend font-regular border-[#FF95DD] border-2 shadow-b2779f-custom'>
+              <button className="flex items-center gap-2 px-4 py-2 bg-pink-500 border-2 border-btnOutline rounded-xl  hover:text-gray-400 transition-colors">
+                <History size={18} />
                 History
               </button>
-              <button
-                className='relative flex justify-center items-center p-2 rounded-xl text-text font-lexend font-regular'
-                onClick={toggleSettings}
-              >
-                <FontAwesomeIcon icon={faCog} size="lg" />
-              </button>
-
-              {showSettings && (
-                <div className='absolute top-10 right-0 w-48 bg-white rounded-lg shadow-lg z-10'>
-                  <button
-                    onClick={() => handleProfileVisibilityChange('Private')}
-                    className='block px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 w-full text-left'
-                  >
-                    Private
-                  </button>
-                  <button
-                    onClick={() => handleProfileVisibilityChange('Public')}
-                    className='block px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 w-full text-left'
-                  >
-                    Public
-                  </button>
-                  <button
-                    onClick={() => handleProfileVisibilityChange('Friends Only')}
-                    className='block px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 w-full text-left'
-                  >
-                    Friends Only
-                  </button>
-                </div>
-              )}
+              <div className="relative" ref={settingsRef}>
+                <button
+                  onClick={() => setShowSettings(!showSettings)}
+                  className="p-2"
+                >
+                   <Settings size={24} color='white' className="text-gray-600" />
+                </button>
+                {showSettings && (
+                  <div className="absolute right-0 mt-2 w-48 bg-backgrond rounded-lg shadow-lg z-10 py-1">
+                    {['Private', 'Public', 'Friends Only'].map((option) => (
+                      <button
+                        key={option}
+                        onClick={() => handlePrivacyChange(option)}
+                        className="block w-full px-4 py-2 text-sm  hover:bg-secondary text-left"
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <Modal show={showModal} onClose={toggleModal} onSave={handleSave} />
+          <div className="mt-8 border-t border-secondary pt-8">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Friends ({friends.length})</h2>
+          {friends.length > 0 && (
+            <button 
+              onClick={handleViewAllFriends}
+              className="text-pink-500 hover:text-pink-600 transition-colors"
+            >
+              View All
+            </button>
+          )}
+        </div>
+  {friends.length > 0 ? (
+    <div className="flex gap-4 overflow-x-auto pb-4">
+      {friends.map((friend) => (
+        <div key={friend.id} className="flex-shrink-0 flex flex-col items-center m-1">
+          <div className="w-24 h-24 rounded-full overflow-hidden ring-2 ring-pink-200">
+            <img
+              src={friend.profile_image_url || '/images/DefaultAvatar.jpg'}
+              alt={friend.name}
+              className="w-24 h-24 object-cover" 
+              onError={(e) => { e.target.src = '/images/DefaultAvatar.jpg'; }}
+            />
+          </div>
+          <p className="mt-2 text-center text-sm truncate w-24">{friend.name}</p>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="text-center py-8 text-gray-500">
+      No friends added yet
+    </div>
+  )}
+</div>
 
-          <div className='flex bg-transparent w-full flex-col space-y-4 mt-8'>
-            <div className='flex w-full flex-row items-center justify-center'>
-              <button className='text-text font-lexend flex border-[#FF95DD] border-[1px] shadow-b2779f-custom p-2 py-1 rounded-xl px-6'>
-                HIDE FRIENDS
-              </button>
-            </div>
-            <div className='relative w-full flex flex-col items-center'>
-              <div className='w-full md:w-9/12 border-b-2 border-[#FF95DD] mb-4 pb-4'>
+          <div className="mt-8 border-t border-secondary pt-8">
+            <h2 className="text-xl font-semibold mb-6">Time Capsules</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {capsules.map((capsule) => (
                 <div
-                  className='flex flex-row justify-start overflow-x-auto space-x-4 p-4 scroll-smooth'
-                  ref={scrollContainerRef}
+                  key={capsule.id}
+                  className="relative h-80 rounded-2xl overflow-hidden group cursor-pointer"
+                  onClick={() => handleCapsuleClick(capsule)}
                 >
-                  {storyImages.map((img, index) => (
-                    <button key={index} className='flex-shrink-0 rounded-full border-secondary border-2 w-16 h-16 md:w-24 md:h-24 overflow-hidden'>
-                      <img
-                        src={`${process.env.PUBLIC_URL}${img}`}
-                        alt={`Story ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-4 md:gap-6 w-full md:w-10/12 justify-center pt-6 md:pt-10">
-                <div
-                  className="bg-secondary p-4 w-full sm:w-[45%] md:w-[30%] lg:w-[22%] h-[300px] md:h-[350px] flex flex-col rounded-[30px] shadow-md relative"
-                  style={{
-                    backgroundImage: `url(${process.env.PUBLIC_URL}/images/bgimage5.jpg)`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat',
-                  }}
-                >
-                  <div className='w-full flex justify-end'>
-                    <button>
-                      <FontAwesomeIcon icon={faEllipsisV} />
-                    </button>
+                  <div
+                    className="w-full h-full"
+                    style={{
+                      backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.5)), url(${capsule.images[0].src})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }}
+                  >
+                    <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                      <h3 className="text-xl font-bold mb-2">{capsule.title}</h3>
+                      <div className="w-full h-px bg-white opacity-50 mb-2"></div>
+                      <p className="text-lg">Opens In: {capsule.daysLeft} Days</p>
+                    </div>
                   </div>
-                  <div className='flex flex-col space-y-2 justify-center items-center h-full'>
-                    <h2 className='text-text font-lexend font-black text-center text-xl'>
-                      FAMILY GATHERING 2024
-                    </h2>
-                    <div className='w-[90%] h-[1px] bg-text'></div>
-                    <p className='text-text font-lexend font-medium text-center text-lg'>
-                      Opens In: 99 Days
-                    </p>
-                  </div>
+                  <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-20 transition-opacity"></div>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
+
+      <Modal
+        show={showEditModal}
+        onClose={handleCloseModal}
+        onSave={handleSaveProfile}
+        initialData={{
+          firstName: user.name.split(' ')[0],
+          lastName: user.name.split(' ')[1] || '',
+          email: user.email,
+          bio: user.bio || '',
+        }}
+      />
+
+{showCapsule && selectedCapsule && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
+    <div className="relative w-full h-[90vh] max-w-7xl mx-auto">
+      <AnimatedCapsule images={selectedCapsule.images} />
+      
+      {/* Title and info */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 text-center z-10">
+        <h2 className="text-2xl font-lexend font-bold text-text mb-2">
+          {selectedCapsule.title}
+        </h2>
+        <p className="text-primary">
+          Opens in {selectedCapsule.daysLeft} days
+        </p>
+      </div>
+      
+      {/* Close button */}
+      <button
+        onClick={handleCloseCapsule}
+        className="absolute top-6 right-6 p-2 rounded-full bg-secondary/30 hover:bg-secondary/50 transition-all border border-btnOutline z-10"
+      >
+        <X size={24} className="text-text" />
+      </button>
+    </div>
+    
+  </div>
+  
+)}
+
+{showFriendsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
+          <div className="bg-background rounded-2xl shadow-custom p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">All Friends</h2>
+              <button
+                onClick={handleCloseFriendsModal}
+                className="p-2 rounded-full bg-secondary/30 hover:bg-secondary/50 transition-all border border-btnOutline"
+              >
+                <X size={24} className="text-text" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {friends.map((friend) => (
+                <div key={friend.id} className="flex flex-col items-center">
+                  <div className="w-20 h-20 rounded-full overflow-hidden ring-2 ring-pink-200">
+                    <img
+                      src={friend.profile_image_url || '/images/DefaultAvatar.jpg'}
+                      alt={friend.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.target.src = '/images/DefaultAvatar.jpg'; }}
+                    />
+                  </div>
+                  <p className="mt-2 text-center text-sm truncate w-full">{friend.name}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
 
 export default Profile;

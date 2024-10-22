@@ -2,9 +2,17 @@ import React, { useState, useEffect, useCallback, useMemo, memo, Suspense } from
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faUserPlus, faTimes, faCheck, faUserFriends } from '@fortawesome/free-solid-svg-icons';
+import { 
+  faSearch, 
+  faUserPlus, 
+  faTimes, 
+  faCheck, 
+  faUserFriends,
+  faChevronLeft,
+  faChevronRight
+} from '@fortawesome/free-solid-svg-icons';
 
-// Optimized image loading component
+// ImageWithFallback component remains unchanged
 const ImageWithFallback = memo(({ src, alt, onLoad, onError, className }) => {
   const [imgSrc, setImgSrc] = useState(src);
 
@@ -28,6 +36,7 @@ const ImageWithFallback = memo(({ src, alt, onLoad, onError, className }) => {
   );
 });
 
+// UserModal component remains unchanged
 const UserModal = memo(({ user, onClose, onSendRequest, isPending }) => {
   const handleSendRequest = useCallback(() => {
     if (!isPending && !user.friend_request_sent && !user.is_friend) {
@@ -92,6 +101,7 @@ const UserModal = memo(({ user, onClose, onSendRequest, isPending }) => {
   );
 });
 
+// UserCard component remains unchanged
 const UserCard = memo(({ 
   user, 
   onSelect, 
@@ -157,6 +167,7 @@ const UserCard = memo(({
   );
 });
 
+// SearchInput component remains unchanged
 const SearchInput = memo(({ value, onChange }) => (
   <div className="relative w-full max-w-sm mb-6 sm:mb-12">
     <input
@@ -173,6 +184,42 @@ const SearchInput = memo(({ value, onChange }) => (
   </div>
 ));
 
+// New Pagination component
+const Pagination = memo(({ currentPage, totalPages, onPageChange }) => {
+  return (
+    <div className="flex items-center justify-center gap-4 mt-8">
+      <button
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className={`p-2 rounded-full ${
+          currentPage === 1 
+            ? 'text-text/30 cursor-not-allowed' 
+            : 'text-[#FF95DD] hover:bg-[#FF95DD]/10'
+        }`}
+      >
+        <FontAwesomeIcon icon={faChevronLeft} />
+      </button>
+      
+      <span className="font-lexend text-text">
+        Page {currentPage} of {totalPages}
+      </span>
+      
+      <button
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className={`p-2 rounded-full ${
+          currentPage === totalPages 
+            ? 'text-text/30 cursor-not-allowed' 
+            : 'text-[#FF95DD] hover:bg-[#FF95DD]/10'
+        }`}
+      >
+        <FontAwesomeIcon icon={faChevronRight} />
+      </button>
+    </div>
+  );
+});
+
+// Updated FriendsPage component with pagination
 const FriendsPage = () => {
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -180,7 +227,12 @@ const FriendsPage = () => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [pendingRequests, setPendingRequests] = useState(new Set());
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
   const navigate = useNavigate();
+  
+  const USERS_PER_PAGE = 9;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -192,26 +244,51 @@ const FriendsPage = () => {
       }
 
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/friends', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-          signal: controller.signal
-        });
+        // Calculate proper offset for pagination
+        const offset = (currentPage - 1) * USERS_PER_PAGE;
+        const response = await fetch(
+          `http://127.0.0.1:8000/api/friends?page=${currentPage}&per_page=${USERS_PER_PAGE}&offset=${offset}`, 
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json',
+            },
+            signal: controller.signal
+          }
+        );
 
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Failed to fetch users');
         }
+        
         const data = await response.json();
-        setUsers(data);
+        
+        if (Array.isArray(data)) {
+          // Handle direct array response
+          setUsers(data.slice(offset, offset + USERS_PER_PAGE));
+          setTotalUsers(data.length);
+          setTotalPages(Math.ceil(data.length / USERS_PER_PAGE));
+        } else if (data.users && Array.isArray(data.users)) {
+          // Handle paginated response
+          setUsers(data.users);
+          setTotalUsers(data.total || data.users.length);
+          setTotalPages(Math.ceil((data.total || data.users.length) / USERS_PER_PAGE));
+        } else {
+          setUsers([]);
+          setTotalUsers(0);
+          setTotalPages(1);
+          console.error('Unexpected API response structure:', data);
+        }
+        
         setError(null);
       } catch (error) {
         if (error.name !== 'AbortError') {
           console.error('Error fetching users:', error);
           setError(error.message);
           toast.error('Failed to load users: ' + error.message);
+          setUsers([]);
+          setTotalUsers(0);
         }
       } finally {
         setIsInitialLoading(false);
@@ -220,17 +297,33 @@ const FriendsPage = () => {
 
     fetchUsers();
     return () => controller.abort();
-  }, [navigate]);
+  }, [navigate, currentPage]);
 
   const filteredUsers = useMemo(() => {
+    if (!Array.isArray(users)) return [];
+    
     const searchLower = searchTerm.toLowerCase();
-    return searchTerm
+    const filtered = searchTerm
       ? users.filter(user => user.name.toLowerCase().includes(searchLower))
       : users;
+    
+    // Ensure we always have exactly USERS_PER_PAGE items
+    const filledArray = [...filtered];
+    while (filledArray.length < USERS_PER_PAGE) {
+      filledArray.push(null); // Add null for empty slots
+    }
+    
+    return filledArray;
   }, [users, searchTerm]);
 
+  // Rest of the handlers remain unchanged
   const handleSearch = useCallback((e) => {
     setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  }, []);
+
+  const handlePageChange = useCallback((newPage) => {
+    setCurrentPage(newPage);
   }, []);
 
   const handleSendRequest = useCallback(async (targetUserId) => {
@@ -259,10 +352,11 @@ const FriendsPage = () => {
 
       toast.success('Friend request sent');
       setUsers(prev =>
-        prev.map(user => user.id === targetUserId 
-          ? { ...user, friend_request_sent: true }
-          : user
-        )
+        Array.isArray(prev) ? prev.map(user => 
+          user?.id === targetUserId 
+            ? { ...user, friend_request_sent: true }
+            : user
+        ) : []
       );
     } catch (error) {
       console.error('Error sending friend request:', error);
@@ -277,14 +371,21 @@ const FriendsPage = () => {
   }, [navigate]);
 
   const handleUserSelect = useCallback((user) => {
-    setSelectedUser(user);
+    if (user) setSelectedUser(user);
   }, []);
 
   const handleCloseModal = useCallback(() => {
     setSelectedUser(null);
   }, []);
-
-  return (
+  const EmptyCard = memo(() => (
+    <div className="bg-background/70 rounded-2xl p-4 sm:p-6 flex flex-col items-center shadow-lg h-full">
+      <div className="w-20 h-20 sm:w-32 sm:h-32 mb-4 bg-gray-200 rounded-full animate-pulse" />
+      <div className="h-6 w-32 bg-gray-200 rounded mb-2 animate-pulse" />
+      <div className="h-4 w-48 bg-gray-200 rounded mb-4 animate-pulse" />
+      <div className="h-8 w-24 bg-gray-200 rounded-full animate-pulse" />
+    </div>
+  ));
+ return (
     <div className="min-h-screen flex flex-col items-center bg-background px-4 sm:px-8 py-12">
       <h1 className="text-text font-lexend font-bold text-2xl sm:text-4xl mb-6 sm:mb-12">
         Find Friends
@@ -294,19 +395,41 @@ const FriendsPage = () => {
 
       <Suspense fallback={<div>Loading...</div>}>
         {isInitialLoading ? (
-          <div>Loading friends...</div>
-        ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 w-full">
-            {filteredUsers.map(user => (
-              <UserCard 
-                key={user.id}
-                user={user}
-                onSelect={handleUserSelect}
-                onSendRequest={handleSendRequest}
-                isPending={pendingRequests.has(user.id)}
-              />
+            {Array(USERS_PER_PAGE).fill(null).map((_, index) => (
+              <EmptyCard key={`loading-${index}`} />
             ))}
           </div>
+        ) : error ? (
+          <div className="text-red-500">{error}</div>
+        ) : totalUsers === 0 ? (
+          <div className="text-text/70">No users found</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 w-full">
+              {filteredUsers.map((user, index) => (
+                user ? (
+                  <UserCard 
+                    key={user.id}
+                    user={user}
+                    onSelect={handleUserSelect}
+                    onSendRequest={handleSendRequest}
+                    isPending={pendingRequests.has(user.id)}
+                  />
+                ) : (
+                  <EmptyCard key={`empty-${index}`} />
+                )
+              ))}
+            </div>
+            
+            {totalPages > 1 && (
+              <Pagination 
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            )}
+          </>
         )}
       </Suspense>
 
@@ -321,5 +444,6 @@ const FriendsPage = () => {
     </div>
   );
 };
+
 
 export default FriendsPage;

@@ -14,6 +14,7 @@ module.exports = {
         text: '#E5E6F0',
         accent: '#B2779F',
         btnOutline: '#A3688F',
+        button:'#FF95DD'
       },
       boxShadow: {
         'secondary': '0px 4px 40px 6px rgba(94, 55, 98, 0.2), 0px 8px 12px 0px rgba(94, 55, 98, 0.1)',

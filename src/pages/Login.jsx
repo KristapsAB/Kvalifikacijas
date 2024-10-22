@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom"; // Import useNavigate
+import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faFacebookF, faInstagram, faDiscord } from '@fortawesome/free-brands-svg-icons';
 import { faCheckCircle, faExclamationCircle, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
@@ -49,7 +49,6 @@ function Login() {
             }
 
             const data = await response.json();
-            // Store the initial count in localStorage so Header component can access it immediately
             localStorage.setItem('friendRequestCount', data.count);
         } catch (error) {
             console.error('Error fetching initial friend request count:', error);
@@ -105,13 +104,28 @@ function Login() {
             localStorage.setItem('access_token', data.access_token);
             localStorage.setItem('user', JSON.stringify(data.user));
 
-            // Initialize friend request count before navigation
             await initializeFriendRequestCount(data.access_token);
 
             navigate('/profile');
         } catch (err) {
             setErrors({ general: 'An unexpected error occurred. Please try again.' });
         }
+    };
+
+    const getInputClassName = (field) => {
+        const baseClasses = "p-3 md:p-5 w-full rounded-[100px] font-light font-lexend bg-background text-center text-text text-base md:text-xl border-2 outline-none placeholder-white placeholder-opacity-30 transition-all duration-300";
+        const validClasses = "border-green-500 shadow-green-600";
+        const invalidClasses = "border-red-500";
+        const defaultClasses = "border-[#A3688F] shadow-secondary";
+
+        if (touched[field]) {
+            if (errors[field]) {
+                return `${baseClasses} ${invalidClasses}`;
+            } else if (field === 'email' ? email.trim() : password.trim()) {
+                return `${baseClasses} ${validClasses}`;
+            }
+        }
+        return `${baseClasses} ${defaultClasses}`;
     };
     
     return (
@@ -157,9 +171,7 @@ function Login() {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     onBlur={() => handleBlur('email')}
-                                    className={`p-3 md:p-5 w-full shadow-secondary rounded-[100px] font-light font-lexend bg-background text-center text-text text-base border-[#A3688F] md:text-xl border-2 ${
-                                        touched.email && (errors.email ? 'border-red-500' : email.trim() && !errors.email ? 'border-green-500' : 'border-[#A3688F]')
-                                    } outline-none placeholder-white placeholder-opacity-30 transition-all duration-300`}
+                                    className={getInputClassName('email')}
                                 />
                                 {touched.email && errors.email && (
                                     <div className="absolute -bottom-6 left-0 w-full text-center text-red-500 font-lexend text-sm">
@@ -176,9 +188,7 @@ function Login() {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     onBlur={() => handleBlur('password')}
-                                    className={`p-3 md:p-5 w-full shadow-secondary rounded-[100px] font-light tracking-wide font-lexend bg-background text-center text-text text-base border-[#A3688F] md:text-xl border-2  ${
-                                        touched.password && (errors.password ? 'border-red-500' : password.trim() && !errors.password ? 'border-green-500' : 'border-[#A3688F]')
-                                    } outline-none placeholder-white placeholder-opacity-30 transition-all duration-300`}
+                                    className={getInputClassName('password')}
                                 />
                                 {touched.password && errors.password && (
                                     <div className="absolute -bottom-6 left-0 w-full text-center text-red-500 text-sm font-lexend">

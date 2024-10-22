@@ -65,7 +65,7 @@ function Register() {
         setSuccess('');
 
         try {
-            const response = await fetch('http://localhost:8000/api/verify-email', {
+            const response = await fetch('http://127.0.0.1:8000/api/verify-email', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -181,7 +181,6 @@ function Register() {
                             </div>
                         )}
 
-                        {/* Social login options */}
                         <div className="w-full pt-4">
                             <p className="text-text text-center mb-4 font-lexend text-sm md:text-base">Or register with</p>
                             <div className="flex justify-center space-x-6">
@@ -192,7 +191,6 @@ function Register() {
                             </div>
                         </div>
 
-                        {/* Login link */}
                         <div className="w-full pt-6 text-center">
                             <p className="text-text font-lexend text-sm md:text-base">
                                 Already have an account?{' '}
