@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faRotate, faBell, faExpand, faStar, faUser } from '@fortawesome/free-solid-svg-icons';  
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import 'react-circular-progressbar/dist/styles.css';
-import CapsuleStatsChart from '../components/CapsuleStats';
+import CapsuleStatsChart from '../components/dashBoardComponents/CapsuleStats';
 function Dashboard() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState("MARCH 2024");

@@ -8,11 +8,15 @@ import {
   faTimes, 
   faCheck, 
   faUserFriends,
+  faClock,  
+  faUsers,
+  faLock,
+  faGlobe,
+  faUserGroup,
   faChevronLeft,
   faChevronRight
 } from '@fortawesome/free-solid-svg-icons';
 
-// ImageWithFallback component remains unchanged
 const ImageWithFallback = memo(({ src, alt, onLoad, onError, className }) => {
   const [imgSrc, setImgSrc] = useState(src);
 
@@ -36,13 +40,61 @@ const ImageWithFallback = memo(({ src, alt, onLoad, onError, className }) => {
   );
 });
 
-// UserModal component remains unchanged
 const UserModal = memo(({ user, onClose, onSendRequest, isPending }) => {
+  const [userDetails, setUserDetails] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchUserDetails = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(`http://127.0.0.1:8000/api/friends/stats/${user.id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch user details');
+        }
+
+        const data = await response.json();
+        setUserDetails(data);
+      } catch (err) {
+        console.error('Error fetching user details:', err);
+        setError('Failed to load user details');
+        toast.error('Failed to load user details');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (user?.id) {
+      fetchUserDetails();
+    }
+  }, [user?.id]);
+
   const handleSendRequest = useCallback(() => {
     if (!isPending && !user.friend_request_sent && !user.is_friend) {
       onSendRequest(user.id);
     }
   }, [user, isPending, onSendRequest]);
+
+  const getPrivacyIcon = (privacy) => {
+    switch (privacy) {
+      case 'private':
+        return faLock;
+      case 'friends_only':
+        return faUserGroup;
+      default:
+        return faGlobe;
+    }
+  };
 
   return (
     <div
@@ -66,42 +118,101 @@ const UserModal = memo(({ user, onClose, onSendRequest, isPending }) => {
             <FontAwesomeIcon icon={faTimes} size="lg" />
           </button>
         </div>
-        <h2 className="text-text font-lexend font-bold text-2xl mb-2">
-          {user.name}
-        </h2>
-        <p className="text-text/70 font-lexend text-sm mb-4">
-          {user.bio || 'No bio available'}
-        </p>
-        <button
-          onClick={handleSendRequest}
-          disabled={isPending || user.friend_request_sent || user.is_friend}
-          className={`w-full bg-gradient-to-r from-[#FF95DD] to-[#FF5CAA] text-background font-lexend font-medium py-2 px-6 rounded-full hover:opacity-90 transition-opacity ${
-            (isPending || user.friend_request_sent || user.is_friend) ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-        >
-          {isPending ? (
-            <span>Sending Request...</span>
-          ) : user.is_friend ? (
-            <>
-              <FontAwesomeIcon icon={faUserFriends} className="mr-2" />
-              Already Friends
-            </>
-          ) : (
-            <>
-              <FontAwesomeIcon 
-                icon={user.friend_request_sent ? faCheck : faUserPlus} 
-                className="mr-2" 
-              />
-              {user.friend_request_sent ? 'Request Sent' : 'Send Friend Request'}
-            </>
+
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-text font-lexend font-bold text-2xl">
+              {user.name}
+            </h2>
+            <FontAwesomeIcon 
+              icon={getPrivacyIcon(user.privacy)} 
+              className="text-text/50"
+              title={`Profile is ${user.privacy}`}
+            />
+          </div>
+
+          <p className="text-text/70 font-lexend text-sm">
+            {user.bio || 'No bio available'}
+          </p>
+
+          {isLoading ? (
+    <div className="space-y-2">
+      <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
+      <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3"></div>
+      <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
+    </div>
+  ) : error ? (
+    <p className="text-red-500 text-sm">{error}</p>
+  ) : userDetails && (
+    <div className="grid grid-cols-2 gap-4 py-4">
+      <div className="text-center p-3 bg-background/50 rounded-lg">
+        <FontAwesomeIcon icon={faUserFriends} className="text-[#FF95DD] mb-2" />
+        <p className="font-bold text-lg text-text">{userDetails.total_friends}</p>
+        <p className="text-sm text-text/70">Friends</p>
+      </div>
+      <div className="text-center p-3 bg-background/50 rounded-lg">
+        <FontAwesomeIcon icon={faClock} className="text-[#FF95DD] mb-2" />
+        <p className="font-bold text-lg text-text">{user.capsule_count || 0}</p>
+        <p className="text-sm text-text/70">Capsules</p>
+      </div>
+    </div>
+  )}
+
+          {user.mutual_friends && user.mutual_friends.length > 0 && (
+            <div className="py-4">
+              <h3 className="text-sm font-medium text-text/70 mb-2">
+                <FontAwesomeIcon icon={faUsers} className="mr-2" />
+                {user.mutual_friends_count} Mutual Friends
+              </h3>
+              <div className="flex -space-x-2 overflow-hidden">
+                {user.mutual_friends.map((friend) => (
+                  <ImageWithFallback
+                    key={friend.id}
+                    src={friend.profile_image_url}
+                    alt={friend.name}
+                    className="w-8 h-8 rounded-full border-2 border-background"
+                    title={friend.name}
+                  />
+                ))}
+                {user.mutual_friends_count > user.mutual_friends.length && (
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium border-2 border-background">
+                    +{user.mutual_friends_count - user.mutual_friends.length}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
-        </button>
+
+          <button
+            onClick={handleSendRequest}
+            disabled={isPending || user.friend_request_sent || user.is_friend}
+            className={`w-full bg-gradient-to-r from-[#FF95DD] to-[#FF5CAA] text-background font-lexend font-medium py-3 px-6 rounded-full hover:opacity-90 transition-opacity ${
+              (isPending || user.friend_request_sent || user.is_friend) ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isPending ? (
+              <span>Sending Request...</span>
+            ) : user.is_friend ? (
+              <>
+                <FontAwesomeIcon icon={faUserFriends} className="mr-2" />
+                Already Friends
+              </>
+            ) : (
+              <>
+                <FontAwesomeIcon 
+                  icon={user.friend_request_sent ? faCheck : faUserPlus} 
+                  className="mr-2" 
+                />
+                {user.friend_request_sent ? 'Request Sent' : 'Send Friend Request'}
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
 });
 
-// UserCard component remains unchanged
 const UserCard = memo(({ 
   user, 
   onSelect, 
@@ -167,7 +278,6 @@ const UserCard = memo(({
   );
 });
 
-// SearchInput component remains unchanged
 const SearchInput = memo(({ value, onChange }) => (
   <div className="relative w-full max-w-sm mb-6 sm:mb-12">
     <input
@@ -184,7 +294,6 @@ const SearchInput = memo(({ value, onChange }) => (
   </div>
 ));
 
-// New Pagination component
 const Pagination = memo(({ currentPage, totalPages, onPageChange }) => {
   return (
     <div className="flex items-center justify-center gap-4 mt-8">
@@ -219,7 +328,6 @@ const Pagination = memo(({ currentPage, totalPages, onPageChange }) => {
   );
 });
 
-// Updated FriendsPage component with pagination
 const FriendsPage = () => {
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -244,7 +352,6 @@ const FriendsPage = () => {
       }
 
       try {
-        // Calculate proper offset for pagination
         const offset = (currentPage - 1) * USERS_PER_PAGE;
         const response = await fetch(
           `http://127.0.0.1:8000/api/friends?page=${currentPage}&per_page=${USERS_PER_PAGE}&offset=${offset}`, 
@@ -265,12 +372,10 @@ const FriendsPage = () => {
         const data = await response.json();
         
         if (Array.isArray(data)) {
-          // Handle direct array response
           setUsers(data.slice(offset, offset + USERS_PER_PAGE));
           setTotalUsers(data.length);
           setTotalPages(Math.ceil(data.length / USERS_PER_PAGE));
         } else if (data.users && Array.isArray(data.users)) {
-          // Handle paginated response
           setUsers(data.users);
           setTotalUsers(data.total || data.users.length);
           setTotalPages(Math.ceil((data.total || data.users.length) / USERS_PER_PAGE));
@@ -307,16 +412,14 @@ const FriendsPage = () => {
       ? users.filter(user => user.name.toLowerCase().includes(searchLower))
       : users;
     
-    // Ensure we always have exactly USERS_PER_PAGE items
     const filledArray = [...filtered];
     while (filledArray.length < USERS_PER_PAGE) {
-      filledArray.push(null); // Add null for empty slots
+      filledArray.push(null); 
     }
     
     return filledArray;
   }, [users, searchTerm]);
 
-  // Rest of the handlers remain unchanged
   const handleSearch = useCallback((e) => {
     setSearchTerm(e.target.value);
     setCurrentPage(1);
