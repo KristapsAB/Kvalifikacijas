@@ -221,7 +221,7 @@ class CapsuleController extends Controller
         }
     }
     
-
+        //commit vajag sito pielikt testam
     public function updateImageComment(Request $request, $capsuleId)
     {
         try {
